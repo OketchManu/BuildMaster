@@ -1,6 +1,7 @@
 {
   "project_info": {
     "project_number": "168277520180",
+    "firebase_url": "https://build-master-pro-default-rtdb.firebaseio.com",
     "project_id": "build-master-pro",
     "storage_bucket": "build-master-pro.firebasestorage.app"
   },
@@ -14,11 +15,11 @@
       },
       "oauth_client": [
         {
-          "client_id": "168277520180-nesdnrhck026fkfdktjikr4p3qt8nklo.apps.googleusercontent.com",
+          "client_id": "168277520180-g6ofm0frtb5lh22co571io2l2ijec6oh.apps.googleusercontent.com",
           "client_type": 1,
           "android_info": {
             "package_name": "com.build.masterpro",
-            "certificate_hash": "e29c72cfa894290ae9bcde9e20b591586c396a2c"
+            "certificate_hash": "c9fe469824f6eb0cb6440ee58c594e0190d3b768"
           }
         },
         {

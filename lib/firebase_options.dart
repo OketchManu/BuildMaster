@@ -46,6 +46,7 @@ class DefaultFirebaseOptions {
     messagingSenderId: '168277520180',
     projectId: 'build-master-pro',
     authDomain: 'build-master-pro.firebaseapp.com',
+    databaseURL: 'https://build-master-pro-default-rtdb.firebaseio.com',
     storageBucket: 'build-master-pro.firebasestorage.app',
   );
 
@@ -54,6 +55,7 @@ class DefaultFirebaseOptions {
     appId: '1:168277520180:android:50cb29e2607fec69683f61',
     messagingSenderId: '168277520180',
     projectId: 'build-master-pro',
+    databaseURL: 'https://build-master-pro-default-rtdb.firebaseio.com',
     storageBucket: 'build-master-pro.firebasestorage.app',
   );
 
@@ -62,6 +64,7 @@ class DefaultFirebaseOptions {
     appId: '1:168277520180:ios:495d58598c8a60da683f61',
     messagingSenderId: '168277520180',
     projectId: 'build-master-pro',
+    databaseURL: 'https://build-master-pro-default-rtdb.firebaseio.com',
     storageBucket: 'build-master-pro.firebasestorage.app',
     androidClientId: '168277520180-0unbdt7crdh986hmuujeuji2scit4gje.apps.googleusercontent.com',
     iosClientId: '168277520180-rd0b4gkrhigogdorlvbdkrkpl6otmkdr.apps.googleusercontent.com',
@@ -73,6 +76,7 @@ class DefaultFirebaseOptions {
     appId: '1:168277520180:ios:495d58598c8a60da683f61',
     messagingSenderId: '168277520180',
     projectId: 'build-master-pro',
+    databaseURL: 'https://build-master-pro-default-rtdb.firebaseio.com',
     storageBucket: 'build-master-pro.firebasestorage.app',
     androidClientId: '168277520180-0unbdt7crdh986hmuujeuji2scit4gje.apps.googleusercontent.com',
     iosClientId: '168277520180-rd0b4gkrhigogdorlvbdkrkpl6otmkdr.apps.googleusercontent.com',
@@ -85,6 +89,7 @@ class DefaultFirebaseOptions {
     messagingSenderId: '168277520180',
     projectId: 'build-master-pro',
     authDomain: 'build-master-pro.firebaseapp.com',
+    databaseURL: 'https://build-master-pro-default-rtdb.firebaseio.com',
     storageBucket: 'build-master-pro.firebasestorage.app',
   );
 

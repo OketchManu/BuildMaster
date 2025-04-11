@@ -2,15 +2,19 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:provider/provider.dart';
+import 'package:build_masterpro/core/services/auth_service.dart';
 
 class ProfileScreen extends StatefulWidget {
   final String email; // The authenticated email passed from the parent
+  final String username; // Added missing username parameter
   final VoidCallback onLogout;
 
   const ProfileScreen({
     super.key,
     required this.email,
-    required this.onLogout, required String username,
+    required this.username,
+    required this.onLogout,
   });
 
   @override
@@ -26,7 +30,7 @@ class ProfileScreenState extends State<ProfileScreen> {
   @override
   void initState() {
     super.initState();
-    _usernameController = TextEditingController();
+    _usernameController = TextEditingController(text: widget.username);
     _loadUserData();
   }
 
@@ -43,7 +47,7 @@ class ProfileScreenState extends State<ProfileScreen> {
 
     if (mounted) {
       setState(() {
-        _usernameController.text = username ?? 'User';
+        _usernameController.text = username ?? widget.username;
         _image = imagePath != null ? XFile(imagePath) : null;
       });
     }
@@ -111,42 +115,128 @@ class ProfileScreenState extends State<ProfileScreen> {
   }
 
   Future<void> _showDeleteConfirmation(BuildContext context) async {
-    return showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-        title: const Row(
-          children: [
-            Icon(Icons.warning_amber_rounded, color: Colors.red, size: 28),
-            SizedBox(width: 8),
-            Text('Delete Account'),
+    final authService = Provider.of<AuthService>(context, listen: false);
+    final user = authService.currentUser;
+
+    // Check if user signed in with Google or Email/Password
+    bool isGoogleUser = user?.providerData.any((info) => info.providerId == 'google.com') ?? false;
+
+    if (isGoogleUser) {
+      // Google users don’t need a password prompt
+      await showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+          title: const Row(
+            children: [
+              Icon(Icons.warning_amber_rounded, color: Colors.red, size: 28),
+              SizedBox(width: 8),
+              Text('Delete Account'),
+            ],
+          ),
+          content: const Text(
+            'Are you sure you want to delete your account? This action cannot be undone.',
+            style: TextStyle(fontSize: 16),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                Navigator.pop(context);
+                await _deleteAccount(null); // No password needed for Google
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              ),
+              child: const Text('Delete', style: TextStyle(color: Colors.white)),
+            ),
           ],
         ),
-        content: const Text(
-          'Are you sure you want to delete your account? This action cannot be undone.',
-          style: TextStyle(fontSize: 16),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+      );
+    } else {
+      // Email/Password users need a password prompt
+      final passwordController = TextEditingController();
+      await showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+          title: const Row(
+            children: [
+              Icon(Icons.warning_amber_rounded, color: Colors.red, size: 28),
+              SizedBox(width: 8),
+              Text('Delete Account'),
+            ],
           ),
-          ElevatedButton(
-            onPressed: () {
-              // Implement account deletion logic here
-              Navigator.pop(context);
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Please enter your password to confirm account deletion.',
+                style: TextStyle(fontSize: 16),
               ),
-            ),
-            child: const Text('Delete', style: TextStyle(color: Colors.white)),
+              const SizedBox(height: 16),
+              TextField(
+                controller: passwordController,
+                obscureText: true,
+                decoration: const InputDecoration(
+                  labelText: 'Password',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
-    );
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                if (passwordController.text.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Password is required.')),
+                  );
+                  return;
+                }
+                Navigator.pop(context);
+                await _deleteAccount(passwordController.text);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              ),
+              child: const Text('Delete', style: TextStyle(color: Colors.white)),
+            ),
+          ],
+        ),
+      );
+    }
+  }
+
+  Future<void> _deleteAccount(String? password) async {
+    final authService = Provider.of<AuthService>(context, listen: false);
+    try {
+      await authService.deleteAccount(password: password);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Account deleted successfully.'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        Navigator.pushNamedAndRemoveUntil(context, '/login', (route) => false);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+        );
+      }
+    }
   }
 
   @override
@@ -154,13 +244,13 @@ class ProfileScreenState extends State<ProfileScreen> {
     return PopScope(
       canPop: !_hasUnsavedChanges,
       onPopInvokedWithResult: (didPop, result) async {
-      if (didPop) return;  // If already popped, do nothing
-      final bool shouldPop = await _handlePopScope();
-      if (shouldPop && context.mounted) {
-        Navigator.of(context).pop();  // Pop without result, or pass a result if needed
-      }
-    },
-          child: Scaffold(
+        if (didPop) return;
+        final bool shouldPop = await _handlePopScope();
+        if (shouldPop && context.mounted) {
+          Navigator.of(context).pop();
+        }
+      },
+      child: Scaffold(
         appBar: AppBar(
           title: const Text('Profile', style: TextStyle(fontWeight: FontWeight.bold)),
           centerTitle: true,
@@ -262,7 +352,7 @@ class ProfileScreenState extends State<ProfileScreen> {
                     const SizedBox(height: 16),
                     _buildProfileField(
                       'Email',
-                      TextEditingController(text: widget.email), // Use the passed email
+                      TextEditingController(text: widget.email),
                       Icons.email,
                       isEditable: false,
                     ),

@@ -1,0 +1,11 @@
+-keep class com.google.firebase.** { *; }
+-dontwarn com.google.firebase.**
+-keep class com.google.android.gms.auth.** { *; }
+-dontwarn com.google.android.gms.auth.**
+-keep class io.flutter.plugins.firebase.** { *; }  # Fixes PigeonUserDetails
+-dontwarn io.flutter.plugins.firebase.**
+-keep class io.flutter.embedding.** { *; }
+-keep class io.flutter.plugin.** { *; }
+-keep class com.google.android.play.core.** { *; }  # Fixes R8 missing classes
+-dontwarn com.google.android.play.core.**
+-keepattributes Signature, *Annotation*, InnerClasses

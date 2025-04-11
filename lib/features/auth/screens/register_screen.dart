@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:provider/provider.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:build_masterpro/core/services/auth_service.dart';
 
 class RegisterScreen extends StatefulWidget {
@@ -11,38 +12,42 @@ class RegisterScreen extends StatefulWidget {
 }
 
 class RegisterScreenState extends State<RegisterScreen> {
-  final _formKey = GlobalKey<FormState>();
-  final _emailController = TextEditingController();
-  final _passwordController = TextEditingController();
-  final _confirmPasswordController = TextEditingController();
-  final _nameController = TextEditingController(); // Added name controller
+  final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
+  final TextEditingController _confirmPasswordController = TextEditingController();
+  final TextEditingController _nameController = TextEditingController();
   bool _isLoading = false;
-  bool _isPasswordVisible = false;
-  bool _isConfirmPasswordVisible = false;
+  bool _obscurePassword = true;
+  bool _obscureConfirmPassword = true;
+  bool _agreeToTerms = false;
 
   @override
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
-    _nameController.dispose(); // Dispose name controller
+    _nameController.dispose();
     super.dispose();
   }
 
   String? _validateEmail(String? value) {
-    if (value == null || value.isEmpty) {
+    if (value == null || value.trim().isEmpty) {
       return 'Email is required';
     }
     final emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
-    if (!emailRegex.hasMatch(value)) {
+    if (!emailRegex.hasMatch(value.trim())) {
       return 'Please enter a valid email';
     }
     return null;
   }
 
   String? _validateName(String? value) {
-    if (value == null || value.isEmpty) {
+    if (value == null || value.trim().isEmpty) {
       return 'Name is required';
+    }
+    if (value.trim().length < 2) {
+      return 'Name must be at least 2 characters';
     }
     return null;
   }
@@ -50,164 +55,158 @@ class RegisterScreenState extends State<RegisterScreen> {
   String? _validatePassword(String? value) {
     if (value == null || value.isEmpty) {
       return 'Password is required';
-    } else if (value.length < 6) {
+    }
+    if (value.length < 6) {
       return 'Password must be at least 6 characters';
     }
     return null;
   }
 
   String? _validateConfirmPassword(String? value) {
+    if (value == null || value.isEmpty) {
+      return 'Please confirm your password';
+    }
     if (value != _passwordController.text) {
       return 'Passwords do not match';
     }
     return null;
   }
 
-  Future<void> _register() async {
-    if (!_formKey.currentState!.validate()) {
+  void _showSnackBar(String message, {bool isError = true}) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: isError
+            ? Theme.of(context).colorScheme.error
+            : Colors.green,
+        behavior: SnackBarBehavior.floating,
+        margin: const EdgeInsets.all(16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
+  }
+
+  String _getFirebaseErrorMessage(dynamic error) {
+    if (error is FirebaseAuthException) {
+      switch (error.code) {
+        case 'email-already-in-use':
+          return 'This email is already registered.';
+        case 'invalid-email':
+          return 'Invalid email format.';
+        case 'weak-password':
+          return 'Password is too weak.';
+        case 'network-request-failed':
+          return 'Network error. Please check your connection.';
+        default:
+          return 'Registration failed: ${error.message ?? 'Unknown error'}';
+      }
+    }
+    return error is Exception
+        ? error.toString().replaceFirst('Exception: ', '')
+        : 'An unexpected error occurred: $error';
+  }
+
+  Future<void> _registerWithEmail() async {
+    if (!_formKey.currentState!.validate() || !_agreeToTerms) {
+      if (!_agreeToTerms) {
+        _showSnackBar('Please agree to the Terms and Conditions');
+      }
       return;
     }
 
     setState(() => _isLoading = true);
-
     try {
       final authService = Provider.of<AuthService>(context, listen: false);
-
-      // Register the user
-      await authService.registerWithEmail(
-        email: _emailController.text,
+      final credential = await authService.registerWithEmail(
+        email: _emailController.text.trim(),
         password: _passwordController.text,
-        name: _nameController.text,
+        name: _nameController.text.trim(),
       );
-
       if (!mounted) return;
-
-      // Show success message
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Registration successful!'),
-          backgroundColor: Colors.green,
-        ),
-      );
-
-      // Navigate to home screen after successful registration
-      Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
-    } catch (e) {
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(_getErrorMessage(e.toString())),
-          backgroundColor: Theme.of(context).colorScheme.error,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
-          ),
-        ),
-      );
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
+      if (credential.user != null) {
+        _showSnackBar('Registration successful!', isError: false);
+        Navigator.pushReplacementNamed(context, '/home');
       }
+    } catch (error) {
+      if (!mounted) return;
+      _showSnackBar(_getFirebaseErrorMessage(error));
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   Future<void> _registerWithGoogle() async {
     setState(() => _isLoading = true);
-
     try {
       final authService = Provider.of<AuthService>(context, listen: false);
-      await authService.signInWithGoogle();
-
+      final credential = await authService.signInWithGoogle();
       if (!mounted) return;
-
-      // Show success message
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Google sign-in successful!'),
-          backgroundColor: Colors.green,
-        ),
-      );
-
-      // Navigate to home screen after successful registration
-      Navigator.pushNamedAndRemoveUntil(context, '/home', (route) => false);
-    } catch (e) {
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(_getErrorMessage(e.toString())),
-          backgroundColor: Theme.of(context).colorScheme.error,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(10),
-          ),
-        ),
-      );
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
+      if (credential.user != null) {
+        _showSnackBar('Google registration successful!', isError: false);
+        Navigator.pushReplacementNamed(context, '/home');
       }
+    } catch (error) {
+      if (!mounted) return;
+      _showSnackBar(_getFirebaseErrorMessage(error));
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  String _getErrorMessage(String error) {
-    if (error.contains('email-already-in-use')) {
-      return 'This email is already registered';
-    } else if (error.contains('invalid-email')) {
-      return 'Invalid email format';
-    } else if (error.contains('weak-password')) {
-      return 'Password is too weak';
-    } else if (error.contains('Google sign-in canceled')) {
-      return 'Google sign-in was canceled';
-    }
-    return 'Failed to register. Please try again.';
+  Widget _buildPasswordStrengthIndicator(String password) {
+    int strength = 0;
+    if (password.length >= 6) strength++;
+    if (password.contains(RegExp(r'[A-Z]'))) strength++;
+    if (password.contains(RegExp(r'[0-9]'))) strength++;
+    if (password.contains(RegExp(r'[!@#$%^&*]'))) strength++;
+
+    return LinearProgressIndicator(
+      value: strength / 4,
+      color: strength < 2 ? Colors.red : strength < 3 ? Colors.orange : Colors.green,
+      backgroundColor: Colors.grey[300],
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isWideScreen = MediaQuery.of(context).size.width > 800;
 
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           gradient: LinearGradient(
             colors: [
-              Color(0xFF006D77),
-              Color(0xFF83C5BE),
+              theme.colorScheme.primary.withValues(alpha:0.8),
+              theme.colorScheme.secondary.withValues(alpha:0.8),
             ],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
         ),
         child: SafeArea(
-          child: Row(
-            children: [
-              if (MediaQuery.of(context).size.width > 800)
-                Expanded(
-                  flex: 3,
-                  child: _buildSidebar(theme),
-                ),
-              Expanded(
-                flex: 2,
-                child: Center(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(32.0),
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 400),
-                      child: _buildForm(theme),
-                    ),
+          child: isWideScreen
+              ? Row(
+                  children: [
+                    Expanded(flex: 3, child: _buildBrandingSection(theme)),
+                    Expanded(flex: 2, child: _buildRegisterForm(theme, showLogo: false)),
+                  ],
+                )
+              : SingleChildScrollView(
+                  child: Column(
+                    children: [
+                      const SizedBox(height: 32),
+                      _buildRegisterForm(theme, showLogo: true),
+                    ],
                   ),
                 ),
-              ),
-            ],
-          ),
         ),
       ),
     );
   }
 
-  Widget _buildSidebar(ThemeData theme) {
+  Widget _buildBrandingSection(ThemeData theme) {
     return Container(
       decoration: BoxDecoration(
         color: theme.colorScheme.primary,
@@ -224,14 +223,11 @@ class RegisterScreenState extends State<RegisterScreen> {
             SvgPicture.asset(
               'assets/icons/construction_logo.svg',
               height: 120,
-              colorFilter: ColorFilter.mode(
-                theme.colorScheme.onPrimary,
-                BlendMode.srcIn,
-              ),
+              colorFilter: ColorFilter.mode(theme.colorScheme.onPrimary, BlendMode.srcIn),
             ),
             const SizedBox(height: 24),
             Text(
-              'Create Account',
+              'Build MasterPro',
               style: theme.textTheme.headlineLarge?.copyWith(
                 color: theme.colorScheme.onPrimary,
                 fontWeight: FontWeight.bold,
@@ -251,152 +247,160 @@ class RegisterScreenState extends State<RegisterScreen> {
     );
   }
 
-  Widget _buildForm(ThemeData theme) {
-    return Form(
-      key: _formKey,
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (MediaQuery.of(context).size.width <= 800) ...[
-            SvgPicture.asset(
-              'assets/icons/construction_logo.svg',
-              height: 80,
-              colorFilter: ColorFilter.mode(
-                theme.colorScheme.primary,
-                BlendMode.srcIn,
+  Widget _buildRegisterForm(ThemeData theme, {required bool showLogo}) {
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(32),
+        child: Card(
+          elevation: 4,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 400),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (showLogo) ...[
+                      SvgPicture.asset(
+                        'assets/icons/construction_logo.svg',
+                        height: 80,
+                        colorFilter: ColorFilter.mode(theme.colorScheme.primary, BlendMode.srcIn),
+                      ),
+                      const SizedBox(height: 24),
+                    ],
+                    Text(
+                      'Create Account',
+                      style: theme.textTheme.headlineMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: theme.colorScheme.onSurface,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Sign up to start managing your projects',
+                      style: theme.textTheme.bodyLarge?.copyWith(
+                        color: theme.colorScheme.onSurface.withValues(alpha:0.7),
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 32),
+                    _buildTextField(
+                      controller: _nameController,
+                      label: 'Full Name',
+                      hint: 'Enter your full name',
+                      icon: Icons.person_outline,
+                      validator: _validateName,
+                      theme: theme,
+                    ),
+                    const SizedBox(height: 16),
+                    _buildTextField(
+                      controller: _emailController,
+                      label: 'Email',
+                      hint: 'Enter your email',
+                      icon: Icons.email_outlined,
+                      validator: _validateEmail,
+                      theme: theme,
+                    ),
+                    const SizedBox(height: 16),
+                    _buildTextField(
+                      controller: _passwordController,
+                      label: 'Password',
+                      hint: 'Enter your password',
+                      icon: Icons.lock_outline,
+                      obscureText: _obscurePassword,
+                      validator: _validatePassword,
+                      theme: theme,
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          _obscurePassword ? Icons.visibility : Icons.visibility_off,
+                          color: theme.colorScheme.primary,
+                        ),
+                        onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    _buildPasswordStrengthIndicator(_passwordController.text),
+                    const SizedBox(height: 16),
+                    _buildTextField(
+                      controller: _confirmPasswordController,
+                      label: 'Confirm Password',
+                      hint: 'Re-enter your password',
+                      icon: Icons.lock_outline,
+                      obscureText: _obscureConfirmPassword,
+                      validator: _validateConfirmPassword,
+                      theme: theme,
+                      suffixIcon: IconButton(
+                        icon: Icon(
+                          _obscureConfirmPassword ? Icons.visibility : Icons.visibility_off,
+                          color: theme.colorScheme.primary,
+                        ),
+                        onPressed: () =>
+                            setState(() => _obscureConfirmPassword = !_obscureConfirmPassword),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Checkbox(
+                          value: _agreeToTerms,
+                          onChanged: (value) => setState(() => _agreeToTerms = value ?? false),
+                          activeColor: theme.colorScheme.primary,
+                        ),
+                        Expanded(
+                          child: Text(
+                            'I agree to the Terms and Conditions',
+                            style: theme.textTheme.bodySmall,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 24),
+                    ElevatedButton(
+                      onPressed: !_isLoading ? _registerWithEmail : null,
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        backgroundColor: theme.colorScheme.primary,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                      child: _isLoading
+                          ? const CircularProgressIndicator(color: Colors.white)
+                          : const Text(
+                              'Register',
+                              style: TextStyle(fontSize: 16, color: Colors.white),
+                            ),
+                    ),
+                    const SizedBox(height: 16),
+                    OutlinedButton.icon(
+                      onPressed: !_isLoading ? _registerWithGoogle : null,
+                      icon: SvgPicture.asset(
+                        'assets/icons/google_logo.svg',
+                        height: 24,
+                      ),
+                      label: const Text('Register with Google'),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        side: BorderSide(color: theme.colorScheme.primary),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    TextButton(
+                      onPressed: !_isLoading ? () => Navigator.pop(context) : null,
+                      child: Text(
+                        'Already have an account? Sign in',
+                        style: TextStyle(color: theme.colorScheme.primary),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
-            const SizedBox(height: 24),
-          ],
-          Icon(
-            Icons.app_registration,
-            size: 48,
-            color: theme.colorScheme.onPrimary,
-            semanticLabel: 'Register icon',
           ),
-          const SizedBox(height: 24),
-          Text(
-            'Register',
-            style: theme.textTheme.headlineMedium?.copyWith(
-              fontWeight: FontWeight.bold,
-              color: theme.colorScheme.onSurface,
-            ),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 32),
-          _buildTextField(
-            controller: _nameController,
-            label: 'Full Name',
-            hint: 'Enter your full name',
-            icon: Icons.person_outline,
-            validator: _validateName,
-            theme: theme,
-          ),
-          const SizedBox(height: 16),
-          _buildTextField(
-            controller: _emailController,
-            label: 'Email',
-            hint: 'Enter your email',
-            icon: Icons.email_outlined,
-            validator: _validateEmail,
-            theme: theme,
-          ),
-          const SizedBox(height: 16),
-          _buildTextField(
-            controller: _passwordController,
-            label: 'Password',
-            hint: 'Enter your password',
-            icon: Icons.lock_outline,
-            obscureText: !_isPasswordVisible,
-            validator: _validatePassword,
-            theme: theme,
-            toggleVisibility: () {
-              setState(() {
-                _isPasswordVisible = !_isPasswordVisible;
-              });
-            },
-          ),
-          const SizedBox(height: 16),
-          _buildTextField(
-            controller: _confirmPasswordController,
-            label: 'Confirm Password',
-            hint: 'Re-enter your password',
-            icon: Icons.lock_outline,
-            obscureText: !_isConfirmPasswordVisible,
-            validator: _validateConfirmPassword,
-            theme: theme,
-            toggleVisibility: () {
-              setState(() {
-                _isConfirmPasswordVisible = !_isConfirmPasswordVisible;
-              });
-            },
-          ),
-          const SizedBox(height: 24),
-          FilledButton(
-            onPressed: _isLoading ? null : _register,
-            style: FilledButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              backgroundColor: const Color(0xFF006D77),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-            child: _isLoading
-                ? SizedBox(
-                    height: 20,
-                    width: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: theme.colorScheme.onPrimary,
-                    ),
-                  )
-                : const Text(
-                    'Register',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
-          ),
-          const SizedBox(height: 16),
-          ElevatedButton(
-            onPressed: _isLoading ? null : _registerWithGoogle,
-            style: ElevatedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              backgroundColor: const Color(0xFF4285F4),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-            child: _isLoading
-                ? const SizedBox(
-                    height: 20,
-                    width: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.white,
-                    ),
-                  )
-                : const Text(
-                    'Register with Google',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
-          ),
-          const SizedBox(height: 16),
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text(
-              'Already have an account? Sign in',
-              style: TextStyle(color: Colors.black),
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -407,33 +411,31 @@ class RegisterScreenState extends State<RegisterScreen> {
     required String hint,
     required IconData icon,
     required String? Function(String?) validator,
-    required ThemeData theme,
     bool obscureText = false,
-    void Function()? toggleVisibility,
+    Widget? suffixIcon,
+    required ThemeData theme,
   }) {
     return TextFormField(
+      key: ValueKey(label),
       controller: controller,
+      validator: validator,
+      obscureText: obscureText,
       decoration: InputDecoration(
         labelText: label,
         hintText: hint,
-        prefixIcon: Icon(icon, color: theme.colorScheme.onSurface),
+        prefixIcon: Icon(icon, color: theme.colorScheme.primary),
+        suffixIcon: suffixIcon,
+        filled: true,
+        fillColor: theme.colorScheme.surface.withValues(alpha:0.9),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: theme.colorScheme.onSurface),
+          borderSide: BorderSide.none,
         ),
-        suffixIcon: toggleVisibility != null
-            ? IconButton(
-                icon: Icon(
-                  obscureText ? Icons.visibility : Icons.visibility_off,
-                  color: theme.colorScheme.onSurface,
-                ),
-                onPressed: toggleVisibility,
-              )
-            : null,
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: theme.colorScheme.primary),
+        ),
       ),
-      validator: validator,
-      obscureText: obscureText,
-      style: theme.textTheme.bodyMedium,
     );
   }
 }

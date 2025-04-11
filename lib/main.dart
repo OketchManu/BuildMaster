@@ -8,11 +8,11 @@ import 'package:build_masterpro/features/projects/screens/profile_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'features/auth/screens/login_screen.dart';
 import 'features/projects/screens/biometric_clock_in_out_screen.dart';
-import 'features/projects/screens/geofencing_screen.dart';
 import 'features/projects/screens/home_screen.dart';
 import 'features/projects/screens/incident_reporting_page.dart';
 import 'features/projects/screens/overtime_tracking_screen.dart';
@@ -28,15 +28,29 @@ import 'features/projects/screens/user_management_screen.dart';
 import 'features/projects/screens/analytics_reporting_screen.dart';
 import 'features/projects/screens/video_call_screen.dart';
 import 'features/projects/screens/messaging_screen.dart';
-import 'features/projects/screens/voice_call_screen.dart'; // Ensure this import is present
 import 'core/services/auth_service.dart';
 import 'firebase_options.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+
+  // Initialize Firebase
+  try {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+  } catch (e) {
+    debugPrint('Error initializing Firebase: $e');
+    // Optionally handle Firebase init failure (e.g., show error screen)
+  }
+
+  // Load .env file with error handling
+  try {
+    await dotenv.load(fileName: ".env");
+  } catch (e) {
+    debugPrint('Error loading .env file: $e');
+  }
+
   runApp(const MyApp());
 }
 
@@ -75,12 +89,12 @@ class _MyAppState extends State<MyApp> {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        ChangeNotifierProvider(
+        Provider<AuthService>(
           create: (_) => AuthService(),
         ),
       ],
       child: MaterialApp(
-        title: 'BuildMasterPro',
+        title: 'BuildMaster',
         theme: ThemeData(
           primarySwatch: Colors.blue,
           colorScheme: ColorScheme.fromSeed(
@@ -158,10 +172,13 @@ class _MyAppState extends State<MyApp> {
           '/user_management': (context) => const UserManagementScreen(),
           '/analytics_reporting': (context) => const AnalyticsReportingScreen(),
           '/profile': (context) => ProfileScreen(
-                username: 'User123',
+                username: 'User123', // Replace with dynamic data if available
                 email: FirebaseAuth.instance.currentUser?.email ?? 'user@example.com',
-                onLogout: () {
-                  Provider.of<AuthService>(context, listen: false).signOut();
+                onLogout: () async {
+                  await Provider.of<AuthService>(context, listen: false).signOut();
+                  if (context.mounted) {
+                    Navigator.pushReplacementNamed(context, '/login');
+                  }
                 },
               ),
           '/fieldReport': (context) => const FieldReportingScreen(),
@@ -171,17 +188,12 @@ class _MyAppState extends State<MyApp> {
           '/submitReports': (context) => const IncidentReportingPage(),
           '/about_app': (context) => const AboutMyAppScreen(),
           '/biometric_clock_in_out': (context) => const BiometricClockInOutScreen(),
-          '/geofencing': (context) => const GeofencingScreen(),
           '/overtime_tracking': (context) => const OvertimeTrackingScreen(),
-          '/voice_call': (context) {
-            final user = FirebaseAuth.instance.currentUser;
+          '/messaging': (context) {
             final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
-            return VoiceCallScreen(
-              number: args?['number'] ?? 'Unknown',
-              contactName: args?['contactName'] ?? '',
-              channelName: user != null
-                  ? '${user.uid}_${DateTime.now().millisecondsSinceEpoch}'
-                  : 'test_channel',
+            return MessagingScreen(
+              contactName: args?['contactName'],
+              contactId: args?['contactId'],
             );
           },
           '/video_call': (context) {
@@ -194,9 +206,6 @@ class _MyAppState extends State<MyApp> {
               isInitiator: args?['isInitiator'] ?? true,
             );
           },
-          '/messaging': (context) {
-            return MessagingScreen();
-          },
         },
       ),
     );
@@ -208,25 +217,23 @@ class AuthWrapper extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<AuthService>(
-      builder: (context, authService, _) {
-        return StreamBuilder<User?>(
-          stream: authService.authStateChanges,
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.active) {
-              final User? user = snapshot.data;
-              if (user == null) {
-                return const LoginScreen();
-              }
-              return const HomeScreen();
-            }
-            return const Scaffold(
-              body: Center(
-                child: CircularProgressIndicator(),
-              ),
-            );
-          },
-        );
+    return StreamBuilder<User?>(
+      stream: FirebaseAuth.instance.authStateChanges(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+        if (snapshot.hasError) {
+          return Scaffold(
+            body: Center(
+              child: Text('Error: ${snapshot.error}'),
+            ),
+          );
+        }
+        final User? user = snapshot.data;
+        return user == null ? const LoginScreen() : const HomeScreen();
       },
     );
   }
@@ -278,14 +285,6 @@ class SettingsScreen extends StatelessWidget {
           ),
           Card(
             child: ListTile(
-              title: const Text('Geofencing'),
-              subtitle: const Text('Set up location-based boundaries'),
-              trailing: const Icon(Icons.arrow_forward_ios),
-              onTap: () => Navigator.pushNamed(context, '/geofencing'),
-            ),
-          ),
-          Card(
-            child: ListTile(
               title: const Text('Overtime Tracking'),
               subtitle: const Text('Track your overtime hours'),
               trailing: const Icon(Icons.arrow_forward_ios),
@@ -302,13 +301,10 @@ class SettingsScreen extends StatelessWidget {
           ),
           Card(
             child: ListTile(
-              title: const Text('Voice Call'),
-              subtitle: const Text('Start a voice call'),
+              title: const Text('Profile'),
+              subtitle: const Text('View and edit your profile'),
               trailing: const Icon(Icons.arrow_forward_ios),
-              onTap: () => Navigator.pushNamed(context, '/voice_call', arguments: {
-                'number': '1234567890', // Example number
-                'contactName': 'Test User', // Example contact name
-              }),
+              onTap: () => Navigator.pushNamed(context, '/profile'),
             ),
           ),
         ],

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:provider/provider.dart'; // Add this import
 import 'package:build_masterpro/core/services/auth_service.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
@@ -12,7 +13,6 @@ class ForgotPasswordScreen extends StatefulWidget {
 class ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
-  final _authService = AuthService();
   bool _isLoading = false;
   bool _emailSent = false;
 
@@ -41,7 +41,9 @@ class ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     setState(() => _isLoading = true);
 
     try {
-      await _authService.sendPasswordResetEmail(_emailController.text.trim());
+      // Use Provider to access AuthService instead of direct instantiation
+      final authService = Provider.of<AuthService>(context, listen: false);
+      await authService.sendPasswordResetEmail(_emailController.text.trim());
       if (!mounted) return;
       setState(() => _emailSent = true);
     } catch (e) {
@@ -76,7 +78,7 @@ class ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    
+
     return Scaffold(
       backgroundColor: theme.colorScheme.surface,
       appBar: AppBar(

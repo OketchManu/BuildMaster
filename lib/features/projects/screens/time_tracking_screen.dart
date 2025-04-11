@@ -42,12 +42,6 @@ class TimeTrackingScreen extends StatelessWidget {
                     onTap: () => Navigator.pushNamed(context, '/biometric_clock_in_out'),
                   ),
                   _QuickActionButton(
-                    icon: Icons.location_on,
-                    label: 'Geofencing',
-                    color: Theme.of(context).colorScheme.secondary,
-                    onTap: () => Navigator.pushNamed(context, '/geofencing'),
-                  ),
-                  _QuickActionButton(
                     icon: Icons.timer,
                     label: 'Overtime\nTracking',
                     color: Theme.of(context).colorScheme.tertiary,

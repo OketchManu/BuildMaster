@@ -33,13 +33,6 @@ class CommunicationToolsScreen extends StatelessWidget {
                   ),
                   _buildCommunicationCard(
                     context,
-                    'Voice Calls',
-                    Icons.call,
-                    Colors.green,
-                    '/voice_call', // Fixed underscore
-                  ),
-                  _buildCommunicationCard(
-                    context,
                     'Video Calls',
                     Icons.videocam,
                     Colors.orange,
@@ -84,7 +77,7 @@ class CommunicationToolsScreen extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12), // Reduced vertical padding
           decoration: BoxDecoration(
-            color: color.withValues(alpha:0.1), // Fixed: withValues → withOpacity
+            color: color.withValues(alpha:0.1),
             borderRadius: BorderRadius.circular(12),
           ),
           child: Column(
